@@ -348,16 +348,22 @@ def run_qf_algos(donation_df, stamp_df=None):
     
     results = dict()
     for f in all_functions:
-        st.write(f'starting {f.__name__}')
-        start = time.time()
         if f in requires_stamps:
             if stamp_df is not None:
+                start = time.time()
+                st.write(f'starting {f.__name__}')
                 results[f] = f(donation_df,stamp_df)
+                end = time.time()
+                st.write(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
+            else: 
+               st.write(f'Skipping {f.__name__} ')
         else:
+            start = time.time()
+            st.write(f'starting {f.__name__}')
             results[f] = f(donation_df)
-        end = time.time()
-        st.write(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
-
+            end = time.time()
+            st.write(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
+        
     results_eng_descriptions = {descriptions[alg] : results[alg] for alg in results.keys()}
 
     projects = donation_df.columns
