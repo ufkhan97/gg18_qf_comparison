@@ -21,7 +21,7 @@ st.title('📊 GG18 QF')
 # Load in data
 df_rounds = utils.load_data(GG18_ROUNDS_QUERY_ID)
 df_votes = utils.load_data(GG18_LONG_VOTES_QUERY_ID)
-df_stamps = utils.load_data(GG18_LONG_STAMPS_QUERY_ID)
+#df_stamps = utils.load_data(GG18_LONG_STAMPS_QUERY_ID)
 # fill in missing values as 0
 df_votes['sum_amountusd'] = df_votes['sum_amountusd'].fillna(0)
 df_votes['score'] = df_votes['score'].fillna(0)
@@ -33,7 +33,7 @@ include_stamps = False #st.checkbox('Include Stamp Clustering Methods (slow)', v
 st.write('Include Stamp Clustering Methods (slow):', include_stamps)
 df_votes = df_votes[df_votes['round_name'] == round_option]
 df_rounds = df_rounds[df_rounds['round_name'] == round_option]
-df_stamps = df_stamps[df_stamps['address'].isin(df_votes['voter'])]
+#df_stamps = df_stamps[df_stamps['address'].isin(df_votes['voter'])]
 
 # Calculate metrics
 num_votes = len(df_votes)
@@ -46,7 +46,7 @@ min_donation_threshold = df_rounds['min_donation_threshold_amount'].iloc[0]
 unique_voters_passing_passport = df_votes[df_votes['passing_passport'] == True]['voter'].nunique()
 total_unique_voters = df_votes['voter'].nunique()
 percent_passing_passport = unique_voters_passing_passport / total_unique_voters
-num_stamps = len(df_stamps)
+#num_stamps = len(df_stamps)
 
 # Display metrics
 col1, col2 = st.columns(2)
@@ -57,22 +57,22 @@ col2.metric("Votes", '{:,}'.format(num_votes))
 col1.metric("Matching Pool", '${:,.2f}'.format(matching_pool))
 col2.metric("Matching Cap", '{}%'.format(matching_cap))
 col1.metric("Percent Users Passing Passport", '{:.2%}'.format(percent_passing_passport))
-col2.metric("Stamps", '{:,}'.format(num_stamps))
+#col2.metric("Stamps", '{:,}'.format(num_stamps))
 col1.metric("Min Donation", '${:,.2f}'.format(min_donation_threshold))
 
 # Filter and create pivot tables
 df_votes = df_votes[df_votes['passing_passport'] == True]
 df_votes = df_votes[df_votes['sum_amountusd'] >= min_donation_threshold]
-df_votes['voter'] = df_votes[df_votes['voter'].isin(df_stamps['address'])]['voter']
+#df_votes['voter'] = df_votes[df_votes['voter'].isin(df_stamps['address'])]['voter']
 pivot_votes = df_votes.pivot_table(index='voter', columns='project_name', values='sum_amountusd', fill_value=0)
-df_stamps = df_stamps[df_stamps['address'].isin(df_votes['voter'])]
-df_stamps['provider_exists'] = 1
-pivot_stamps = df_stamps.pivot_table(index='address', columns='provider', values='provider_exists', fill_value=0, aggfunc='max')
+#df_stamps = df_stamps[df_stamps['address'].isin(df_votes['voter'])]
+#df_stamps['provider_exists'] = 1
+#pivot_stamps = df_stamps.pivot_table(index='address', columns='provider', values='provider_exists', fill_value=0, aggfunc='max')
 
 
 st.subheader('QF ALGORITHMS')
 if include_stamps:
-    qf = utils.run_qf_algos(pivot_votes, pivot_stamps)
+    qf = utils.run_qf_algos(pivot_votes)#, pivot_stamps)
 else:
     qf = utils.run_qf_algos(pivot_votes)
 st.write(qf)
