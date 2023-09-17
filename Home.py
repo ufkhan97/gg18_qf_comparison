@@ -29,7 +29,7 @@ df_rounds['min_donation_threshold_amount'] = df_rounds['min_donation_threshold_a
 
 # Filter by round
 round_option = st.selectbox('Select Round', list(df_votes['round_name'].unique()), 3)
-include_stamps = st.checkbox('Include Stamp Clustering Methods', value=False)
+include_stamps = st.checkbox('Include Stamp Clustering Methods (slow)', value=False)
 df_votes = df_votes[df_votes['round_name'] == round_option]
 df_rounds = df_rounds[df_rounds['round_name'] == round_option]
 df_stamps = df_stamps[df_stamps['address'].isin(df_votes['voter'])]
