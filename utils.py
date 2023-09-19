@@ -332,9 +332,9 @@ def CO_clustermatch_simple(donation_df, stamp_df):
 
   return funding
 
-@st.cache_resource(ttl=36000)
-def run_qf_algos(donation_df, stamp_df=None):
-    all_functions = [standard_donation, standard_qf,  CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, donation_profile_clustermatch, pairwise, stamp_profile_pairwise, donation_profile_pairwise ]
+@st.cache_data(ttl=36000)
+def run_qf_algos(matching_cap_percent, donation_df, stamp_df=None):
+    all_functions = [standard_donation, standard_qf ,  CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, donation_profile_clustermatch, pairwise, stamp_profile_pairwise, donation_profile_pairwise ]
     requires_stamps = [CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, stamp_profile_pairwise]
     descriptions = {standard_donation: 'User donations only (nothing quadratic)',
                     standard_qf: 'Normal QF',
@@ -364,11 +364,44 @@ def run_qf_algos(donation_df, stamp_df=None):
             end = time.time()
             st.write(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
         
+    
     results_eng_descriptions = {descriptions[alg] : results[alg] for alg in results.keys()}
-
+   
     projects = donation_df.columns
     total_money = {x: sum(results_eng_descriptions[x][p] for p in projects) for x in results_eng_descriptions.keys()}
     results_normalized = {x: {p: results_eng_descriptions[x][p]/total_money[x] for p in projects} for x in results_eng_descriptions.keys()}
-    res_norm_df = pd.DataFrame(results_normalized)
-    return res_norm_df
+    
+    result = pd.DataFrame(results_normalized)
+    for col in result.columns:
+      new_col = col + ' capped'
+      result[new_col] = check_matching_cap(result[col].copy(), matching_cap_percent)
+    return result
+
+
+def check_matching_cap( col, matching_cap_percent):
+    while True:
+        # Step 1: Identify the projects that have matching percentages exceeding the cap
+        over_cap = np.maximum(0, col - matching_cap_percent)
+        
+        # Step 2: Set the matching percent to the cap percent for projects exceeding the cap
+        col.loc[col > matching_cap_percent] = matching_cap_percent
+        
+        # Step 3: Calculate the total matching percent for projects not exceeding the cap
+        total_percent_for_not_capped = col[col < matching_cap_percent].sum()
+        
+        # Step 4: If there is percentage available for redistribution, redistribute the excess percentage from over-capped projects proportionally
+        if total_percent_for_not_capped > 0:
+            remainder_percent = over_cap.sum() / total_percent_for_not_capped
+            col.loc[col < matching_cap_percent] *= (1 + remainder_percent)
+        else:
+            # If no percentage is available for redistribution, exit the loop
+            break
+        
+        # Step 5: Check if the updates pushed any project over the cap, if not, exit the loop
+        over_cap_after_update = np.maximum(0, col - matching_cap_percent)
+        if not over_cap_after_update.sum() > 0:
+            break
+
+    # Return the updated project data
+    return col
 
