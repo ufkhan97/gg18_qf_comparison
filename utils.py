@@ -16,17 +16,14 @@ def load_data(QUESTION_ID):
         "Content-Type": "application/json",
         "X-Metabase-Session": st.secrets["metabase_token"]
     }
-
     # Execute a specific saved question (query) using its ID
     query_url = f"https://regendata.xyz/api/card/{QUESTION_ID}/query/json"
     response = requests.post(query_url, headers=headers)
-
     if response.status_code == 200:
         data = response.json()
     else:
         st.write("Error:", response.status_code, response.text)
         data = []
-
     # Load in df
     result = pd.DataFrame(data)
     return result
@@ -317,10 +314,8 @@ def CO_clustermatch_simple(donation_df, stamp_df):
 
   K_dfs = {p: pd.DataFrame(K[p]).transpose() for p in projects}
   normalized_stamp_df = stamp_df.apply(lambda row: row / row.sum(), axis=1)
-
   # initialize funding to be sum of donations, then add in pairwise amounts
   funding = {p: donation_df[p].sum() for p in projects}
-
   for p in projects:
     K_df = K_dfs[p]
     for (s1, s2) in combinations(stamps, 2):
@@ -329,13 +324,80 @@ def CO_clustermatch_simple(donation_df, stamp_df):
       if np.isnan(s1_sum) or np.isnan(s2_sum):
         raise NotImplementedError('User has 0 stamps/ cluster memberships')
       funding[p] += sqrt(s1_sum * s2_sum)
+  return funding
+
+def COCM_fast(donation_df, stamp_df):
+  # run CO-CM on a set of funding amounts, using stamps as the clusters
+  # unlike the above function (CO_clustermatch), follow the formula in the whitepaper exactly -- don't get fancy with K(i,h)
+
+  projects = donation_df.columns
+  stamps = stamp_df.columns
+  donors = donation_df.index
+  stamp_holders = stamp_df.index
+
+  # normalize the stamp dataframe so that rows sum to 1. Now, an entry tells us the "weight" that a particular group has for a particular user.
+  normalized_stamps = stamp_df.apply(lambda row: row / row.sum(), axis=1)
+
+  # Remove the following wallets from both dataframes:
+  # - wallets with no stamps
+  # - wallets that are just in one dataframe, but not the other
+  wallets_with_no_stamps = normalized_stamps.index[normalized_stamps.apply(lambda row: any(row.isna()), axis=1)]
+  wallets_just_in_donors = list(set(donors) - set(stamp_holders))
+  wallets_just_in_stamp_holders = list(set(stamp_holders) - set(donors))
+  wallets_to_drop = wallets_with_no_stamps + wallets_just_in_donors + wallets_just_in_stamp_holders
+
+  # After we drop the appropriate wallets, make sure all the indexes are sorted the same way.
+  for df in [normalized_stamps, donation_df, stamp_df]:
+    df.drop(wallets_to_drop, inplace=True)
+    df.sort_index(inplace=True)
+
+  # reset variables for indexes, now that we've changed them
+  donors = donation_df.index
+
+  # friendship_matrix is a matrix whose rows and columns are both wallets,
+  # and a value greater than 0 at index i,j means that wallets i and j are in at least one group together.
+  friendship_matrix = stamp_df.dot(stamp_df.transpose())
+
+  # k_indicators is a dataframe with wallets as rows and stamps as columns.
+  # entry i,g is True if wallet i is in a shared group with someone in g, and False otherwise.
+  k_indicators = friendship_matrix.dot(stamp_df).apply(lambda col: col > 0)
+
+  # Create a dictionary to store funding amounts for each project.
+  # first we'll fund each project with the sum of donations to that project
+  # then we'll add in the pairwise matching amounts, which is the hard part.
+  funding = {p: donation_df[p].sum() for p in projects}
+
+  for p in projects:
+    # get the actual k values for this project using contributions and indicators.
+
+    # C will be used to build the matrix of k values.
+    # It is a matrix where rows are wallets, columns are projects, and the ith row of the matrix just has wallet i's contribution to the project in every entry.
+    C = pd.DataFrame(index=donors, columns = ['_'], data = donation_df[p].values).dot(pd.DataFrame(index= ['_'], columns = stamps, data=1))
+    # C is attained by taking the matrix multiplication of the column vector donation_df[p] (which is every agent's donation to project p) and a row vector with as many columns as projects, and a 1 in every entry
+    # the above line is so long mainly because you need to cast Pandas series' (i.e. vectors) as dataframes (i.e. matrices) for the matrix multiplication to work.
+
+    # now, K is a matrix where rows are wallets, columns are projects, and entry i,g is c_i if i does not know any agents in group g, and sqrt(c_i) otherwise
+    K = (k_indicators * C.pow(1/2)) + ((1 - k_indicators) * C)
+
+
+    # TODO: explain this with comments
+
+    P_prime = K.transpose().dot(normalized_stamps)
+
+    P = (P_prime * P_prime.transpose()).pow(1/2)
+    print(P.shape)
+
+    np.fill_diagonal(P.values, 0)
+
+    funding[p] += P.sum().sum()
+
 
   return funding
 
 @st.cache_data(ttl=36000)
 def run_qf_algos(matching_cap_percent, donation_df, stamp_df=None):
-    all_functions = [standard_donation, standard_qf ,  CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, donation_profile_clustermatch, pairwise, stamp_profile_pairwise, donation_profile_pairwise ]
-    requires_stamps = [CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, stamp_profile_pairwise]
+    all_functions = [standard_donation, standard_qf ,  CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, donation_profile_clustermatch, pairwise, stamp_profile_pairwise, donation_profile_pairwise, COCM_fast ]
+    requires_stamps = [CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, stamp_profile_pairwise, COCM_fast]
     descriptions = {standard_donation: 'User donations only (nothing quadratic)',
                     standard_qf: 'Normal QF',
                     CO_clustermatch_simple: 'CO-CM (following the whitepaper)',
@@ -344,7 +406,8 @@ def run_qf_algos(matching_cap_percent, donation_df, stamp_df=None):
                     donation_profile_clustermatch: 'Cluster match (clustering on donation profiles)',
                     pairwise: 'Pairwise match (following original blog post)',
                     stamp_profile_pairwise: 'Pairwise match (attenuating using stamp profiles)',
-                    donation_profile_pairwise: 'Pairwise match (attenuating using donation profiles)'}
+                    donation_profile_pairwise: 'Pairwise match (attenuating using donation profiles)',
+                    COCM_fast: 'CO-CM fast'}
     
     results = dict()
     for f in all_functions:

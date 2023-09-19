@@ -30,8 +30,8 @@ df_votes['score'] = df_votes['score'].fillna(0)
 df_rounds['min_donation_threshold_amount'] = df_rounds['min_donation_threshold_amount'].fillna(0)
 
 # Filter by round
-round_option = st.selectbox('Select Round', list(df_votes['round_name'].unique()), 3)
-include_stamps = st.checkbox('Include Stamp Clustering Methods (slow)', value=False)
+round_option = st.selectbox('Select Round', list(df_votes['round_name'].unique()), 4)
+include_stamps = st.checkbox('Include Stamp Clustering Methods (slow)', value=True)
 st.write('Include Stamp Clustering Methods (slow):', include_stamps)
 df_votes = df_votes[df_votes['round_name'] == round_option]
 df_rounds = df_rounds[df_rounds['round_name'] == round_option]
@@ -73,7 +73,7 @@ pivot_stamps = df_stamps.pivot_table(index='address', columns='provider', values
 
 
 st.subheader('QF ALGORITHMS')
-qf = utils.run_qf_algos(matching_cap/100, pivot_votes)
+qf = utils.run_qf_algos(matching_cap/100, pivot_votes, pivot_stamps)
 st.write(qf)
 
 df_qf = pd.DataFrame(qf).reset_index()
