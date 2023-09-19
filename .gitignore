@@ -1,2 +1,4 @@
 
 .streamlit/secrets.toml
+df_rounds.csv
+df_votes.csv
