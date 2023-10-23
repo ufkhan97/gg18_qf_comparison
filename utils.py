@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
@@ -8,13 +7,15 @@ from math import sqrt
 from math import floor
 from functools import reduce
 import time
+import streamlit as st
 
-@st.cache_resource(ttl=36000)
+@st.cache_data(ttl=36000)
 def load_data(QUESTION_ID):
     # Set up headers with the session token
     headers = {
         "Content-Type": "application/json",
         "X-Metabase-Session": st.secrets["metabase_token"]
+        
     }
     # Execute a specific saved question (query) using its ID
     query_url = f"https://regendata.xyz/api/card/{QUESTION_ID}/query/json"
@@ -22,7 +23,7 @@ def load_data(QUESTION_ID):
     if response.status_code == 200:
         data = response.json()
     else:
-        st.write("Error:", response.status_code, response.text)
+        print("Error:", response.status_code, response.text)
         data = []
     # Load in df
     result = pd.DataFrame(data)
@@ -302,7 +303,7 @@ def CO_clustermatch_simple(donation_df, stamp_df):
       total_friends_intersections = {s: len(total_friends & cluster_members_sets[s]) for s in stamps}  
       for p in projects:
           sqrt_contribution_dp = sqrt_contribution[d][p] if d in sqrt_contribution else None
-          contribution_dp = contribution[d][p]  
+          contribution_dp = contribution[d][p]  if d in contribution else None
           for s in stamps:
               # if d is in s or any of d's friends are in s, we should square root the contribution
               should_square_root = stamp_profile[s] > 0 or total_friends_intersections[s] > 0
@@ -385,7 +386,7 @@ def COCM_fast(donation_df, stamp_df):
     P_prime = K.transpose().dot(normalized_stamps)
 
     P = (P_prime * P_prime.transpose()).pow(1/2)
-    print(P.shape)
+    #print(P.shape)
 
     np.fill_diagonal(P.values, 0)
 
@@ -395,9 +396,10 @@ def COCM_fast(donation_df, stamp_df):
   return funding
 
 @st.cache_data(ttl=36000)
+ #
 def run_qf_algos(matching_cap_percent, donation_df, stamp_df=None):
-    all_functions = [standard_donation, standard_qf ,  CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, donation_profile_clustermatch, pairwise, stamp_profile_pairwise, donation_profile_pairwise, COCM_fast ]
-    requires_stamps = [CO_clustermatch_simple, CO_clustermatch, stamp_clustermatch, stamp_profile_pairwise, COCM_fast]
+    all_functions = [standard_donation, standard_qf , donation_profile_clustermatch, CO_clustermatch, stamp_clustermatch, donation_profile_clustermatch, pairwise, stamp_profile_pairwise, donation_profile_pairwise, COCM_fast ]
+    requires_stamps = [ CO_clustermatch, stamp_clustermatch, stamp_profile_pairwise, COCM_fast]
     descriptions = {standard_donation: 'User donations only (nothing quadratic)',
                     standard_qf: 'Normal QF',
                     CO_clustermatch_simple: 'CO-CM (following the whitepaper)',
@@ -414,18 +416,18 @@ def run_qf_algos(matching_cap_percent, donation_df, stamp_df=None):
         if f in requires_stamps:
             if stamp_df is not None:
                 start = time.time()
-                st.write(f'starting {f.__name__}')
+                print(f'Starting {f.__name__}')
                 results[f] = f(donation_df,stamp_df)
                 end = time.time()
-                st.write(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
+                print(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
             else: 
-               st.write(f'Skipping {f.__name__} ')
+               print(f'Skipping {f.__name__} ')
         else:
             start = time.time()
-            st.write(f'starting {f.__name__}')
+            print(f'Starting {f.__name__}')
             results[f] = f(donation_df)
             end = time.time()
-            st.write(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
+            print(f"Function '{f.__name__}' execution time: {(end - start):.2f} seconds")
         
     
     results_eng_descriptions = {descriptions[alg] : results[alg] for alg in results.keys()}
