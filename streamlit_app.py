@@ -20,12 +20,12 @@ st.title('📊 GG18 QF')
 
 # Load in data
 data_load_state = st.text('Loading data...')
-#df_rounds = utils.load_data(GG18_ROUNDS_QUERY_ID)
-#df_votes = utils.load_data(GG18_LONG_VOTES_QUERY_ID)
+df_rounds = utils.load_data(GG18_ROUNDS_QUERY_ID)
+df_votes = utils.load_data(GG18_LONG_VOTES_QUERY_ID)
 data_load_state.text('Loading data... done!')
 
-df_rounds = pd.read_csv('df_rounds.csv')
-df_votes = pd.read_csv('df_votes.csv')
+#df_rounds = pd.read_csv('df_rounds.csv')
+#df_votes = pd.read_csv('df_votes.csv')
 df_votes['sum_amountusd'] = df_votes['sum_amountusd'].fillna(0)
 df_votes['score'] = df_votes['score'].fillna(0)
 df_rounds['min_donation_threshold_amount'] = df_rounds['min_donation_threshold_amount'].fillna(0)
